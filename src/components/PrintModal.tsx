@@ -238,6 +238,7 @@ export function PrintModal({ grid, onClose, onToast }: PrintModalProps) {
         <p className="bp-note">
           打印时把缩放设为「100% / 实际大小」，关掉页眉页脚；想留档就选「另存为 PDF」。
           {plan.pages.length > 1 && ' 多张时按四角十字对齐拼接。'}
+          {options.beads && ' 圆豆外观更接近实物，但纯色块在黑白打印时不易区分，建议彩色输出。'}
         </p>
 
         <footer className="modal-foot">

@@ -255,6 +255,8 @@ export function renderBlueprintPage({ grid, plan, page, options, dpi }: RenderAr
   if (options.beads) {
     // 圆豆：直径占约 88%，豆间留缝，看起来更接近画布
     const r = cell * 0.44
+    // 描边往墨色偏一档，纯白豆才不会被白纸吃掉轮廓
+    const edge = (v: number) => Math.round(v * 0.7 + 36 * 0.3)
     for (let row = page.rowStart; row < page.rowEnd; row += 1) {
       for (let c = page.colStart; c < page.colEnd; c += 1) {
         const value = grid.cells[row * grid.cols + c]
@@ -268,7 +270,7 @@ export function renderBlueprintPage({ grid, plan, page, options, dpi }: RenderAr
         ctx.arc(cx, cy, r, 0, Math.PI * 2)
         ctx.fillStyle = options.codes ? `rgba(${cr}, ${cg}, ${cb}, 0.34)` : color.hex
         ctx.fill()
-        ctx.strokeStyle = `rgba(${cr}, ${cg}, ${cb}, ${options.codes ? 0.62 : 0.45})`
+        ctx.strokeStyle = `rgba(${edge(cr)}, ${edge(cg)}, ${edge(cb)}, ${options.codes ? 0.72 : 0.62})`
         ctx.lineWidth = 0.1
         ctx.stroke()
 
@@ -278,6 +280,9 @@ export function renderBlueprintPage({ grid, plan, page, options, dpi }: RenderAr
           ctx.arc(cx, cy, r * 0.3, 0, Math.PI * 2)
           ctx.fillStyle = '#FFFFFF'
           ctx.fill()
+          ctx.strokeStyle = 'rgba(36, 28, 21, 0.22)'
+          ctx.lineWidth = 0.08
+          ctx.stroke()
         }
       }
     }
