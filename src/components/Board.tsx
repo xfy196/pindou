@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { EMPTY, floodFill, linePoints, rectPoints, type Grid } from '../lib/board'
 import { PALETTE } from '../lib/colors'
@@ -50,7 +50,9 @@ export function Board({
   const [hover, setHover] = useState<Point | null>(null)
   const [shape, setShape] = useState<{ start: Point; end: Point } | null>(null)
 
-  dimsRef.current = { cols: grid.cols, rows: grid.rows }
+  useLayoutEffect(() => {
+    dimsRef.current = { cols: grid.cols, rows: grid.rows }
+  }, [grid.cols, grid.rows])
 
   const width = grid.cols * cell
   const height = grid.rows * cell

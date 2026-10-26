@@ -119,9 +119,11 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const timers = toastTimers
+    const saved = savedTimer
     return () => {
-      toastTimers.current.forEach((timer) => window.clearTimeout(timer))
-      window.clearTimeout(savedTimer.current)
+      timers.current.forEach((timer) => window.clearTimeout(timer))
+      window.clearTimeout(saved.current)
     }
   }, [])
 

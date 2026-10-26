@@ -1,32 +1,78 @@
-# React + TypeScript + Vite
+# 拼豆工作室 · Perler Studio
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+一个在浏览器里画拼豆图纸的小工具：在标准拼豆板上逐颗放豆、把照片转成图纸、顺手算清每种颜色要用多少颗。
 
-Currently, two official plugins are available:
+纯前端、零后端，所有数据只保存在本机浏览器里。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 功能
 
-## React Compiler
+- **拼豆画布**：16 / 24 / 29 / 32 / 48 / 64 六种标准板尺寸，缩放到 220%，可切换网格与水平对称。
+- **六种工具**：画笔、橡皮、油漆桶填充、直线、矩形框、吸管取色；拖动时有 Bresenham 补点，不会因为鼠标太快漏豆。
+- **撤销 / 重做**：最多 60 步，覆盖每一笔、清空、换板、导入和套用模板。
+- **39 色豆卡**：按基础 / 暖调 / 冷调 / 大地 / 特别分组，显示色号与 HEX。
+- **图片转图纸**：拖入图片，实时预览转豆效果；可选抖动（Floyd–Steinberg）、去白底、cover / contain 裁切。颜色匹配在 CIE Lab 空间做最近邻，比直接比 RGB 更接近肉眼判断。
+- **四种起手图案**：一颗心、小星星、彩虹云、蘑菇仔，一键套用。
+- **珠子清单**：统计总颗数、用色数、铺满率，按颜色列出用量条；悬停某一行会在画布上高亮对应豆子。
+- **导出**：
+  - PNG —— 透明背景，2× 分辨率（单颗 24px），适合直接发给别人或打印。
+  - CSV —— 带 BOM 的拼豆清单，Excel / Numbers 打开不乱码。
+- **自动保存**：每次改动自动写入 `localStorage`，刷新不丢；也可以手动「保存」并看到提示。
+- **响应式**：桌面三栏、平板两栏、手机单栏都能用；手机上工具和清单自动重排。
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 开始使用
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev      # 本地开发，默认 http://localhost:5173
+npm run build    # 类型检查 + 生产构建
+npm run preview  # 预览构建产物
+npm run lint     # oxlint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## 快捷键
+
+| 按键 | 作用 |
+| --- | --- |
+| `B` / `E` / `F` | 画笔 / 橡皮 / 填充 |
+| `L` / `R` / `I` | 直线 / 矩形 / 吸管 |
+| `M` | 开关水平对称 |
+| `G` | 开关网格 |
+| `[` / `]` | 缩小 / 放大画布 |
+| `Cmd/Ctrl + Z` | 撤销 |
+| `Shift + Cmd/Ctrl + Z` | 重做 |
+| `Cmd/Ctrl + S` | 保存 |
+
+## 技术说明
+
+- **栈**：React 19 + TypeScript + Vite，无额外运行时依赖，图标全部为内联 SVG。
+- **画布**：双 canvas 分层（底层豆子、上层悬停/高亮），绘制用 `requestAnimationFrame` 合批，64×64 拖动仍保持 60fps。
+- **颜色**：`src/lib/colors.ts` 内置 39 色色卡与 sRGB → CIE Lab 转换，导入图片时按 Lab 距离匹配最接近的豆色。
+- **存储**：单个 `localStorage` 键 `pindou.studio.v1`，保存画布、尺寸、调色板选择与偏好；隐私模式下写入失败会静默降级。
+- **字体**：ZCOOL KuaiLe（标题）+ Noto Sans SC（正文）+ DM Mono（数字/色号），来自 Google Fonts；离线时会回退到系统字体。
+
+## 目录结构
+
+```
+src/
+  App.tsx                 应用状态、历史记录、保存与导出、整体布局
+  components/
+    Board.tsx             画布交互（指针、工具、对称、悬停高亮）
+    PalettePanel.tsx      色卡与当前颜色
+    PatternBar.tsx        起手图案缩略图
+    BeadList.tsx          用量统计、清单、CSV 入口
+    ImportModal.tsx       图片转图纸
+  lib/
+    colors.ts             色卡、Lab 转换、最近色匹配
+    draw.ts               豆子与画布的 Canvas 绘制
+    patterns.ts           心形 / 星星 / 彩虹 / 蘑菇生成器
+    convert.ts            图片采样、抖动、裁切与映射
+    board.ts              网格工具：补点、矩形、洪水填充
+    types.ts              工具与板尺寸元数据
+  index.css               全部样式与设计变量
+```
+
+## 小提示
+
+- 第一次打开会有一颗 29×29 的示例爱心；想从空白开始，点画布下方的「清空」即可（可撤销）。
+- 换板尺寸会重建画布并裁掉超出部分，同样可以用 `Cmd/Ctrl + Z` 找回。
+- 所有内容只在本机，换浏览器或清理站点数据后不会保留；重要图纸记得导出 PNG。

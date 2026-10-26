@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
-import { imageToBeads, type ConvertOptions, type ConvertResult } from '../lib/convert'
+import { imageToBeads, type ConvertOptions } from '../lib/convert'
 import { drawBoard } from '../lib/draw'
 import { CheckIcon, CloseIcon, ImageIcon } from './Icons'
 
@@ -19,11 +19,15 @@ export function ImportModal({ cols, rows, onClose, onApply }: ImportModalProps) 
     dropLight: false,
     fit: 'cover',
   })
-  const [result, setResult] = useState<ConvertResult | null>(null)
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const previewRef = useRef<HTMLCanvasElement>(null)
   const objectUrlRef = useRef<string | null>(null)
+
+  const result = useMemo(
+    () => (image ? imageToBeads(image, cols, rows, options) : null),
+    [image, cols, rows, options],
+  )
 
   const loadFile = (file: File | undefined) => {
     if (!file || !file.type.startsWith('image/')) return
@@ -51,14 +55,6 @@ export function ImportModal({ cols, rows, onClose, onApply }: ImportModalProps) 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
-
-  useEffect(() => {
-    if (!image) {
-      setResult(null)
-      return
-    }
-    setResult(imageToBeads(image, cols, rows, options))
-  }, [image, cols, rows, options])
 
   useEffect(() => {
     const canvas = previewRef.current
