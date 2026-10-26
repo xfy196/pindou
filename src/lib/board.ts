@@ -6,18 +6,6 @@ export interface Grid {
 
 export const EMPTY = -1
 
-export function createCells(cols: number, rows: number, value = EMPTY): number[] {
-  return new Array(cols * rows).fill(value) as number[]
-}
-
-export function emptyGrid(cols: number, rows: number): Grid {
-  return { cols, rows, cells: createCells(cols, rows) }
-}
-
-export function cloneGrid(grid: Grid): Grid {
-  return { cols: grid.cols, rows: grid.rows, cells: grid.cells.slice() }
-}
-
 export function sameCells(a: number[], b: number[]): boolean {
   if (a === b) return true
   if (a.length !== b.length) return false

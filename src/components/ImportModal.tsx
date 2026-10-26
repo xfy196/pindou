@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { DragEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import type { DragEvent, KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { imageToBeads, type ConvertOptions } from '../lib/convert'
 import { drawBoard } from '../lib/draw'
 import { CheckIcon, CloseIcon, ImageIcon } from './Icons'
@@ -9,6 +9,15 @@ interface ImportModalProps {
   rows: number
   onClose: () => void
   onApply: (cells: number[]) => void
+}
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/** 只在弹窗内部拿可聚焦元素，隐藏的 file input 会被 offsetParent 过滤掉 */
+function focusablesIn(root: HTMLElement | null): HTMLElement[] {
+  if (!root) return []
+  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null)
 }
 
 export function ImportModal({ cols, rows, onClose, onApply }: ImportModalProps) {
@@ -23,6 +32,8 @@ export function ImportModal({ cols, rows, onClose, onApply }: ImportModalProps) 
   const inputRef = useRef<HTMLInputElement>(null)
   const previewRef = useRef<HTMLCanvasElement>(null)
   const objectUrlRef = useRef<string | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
 
   const result = useMemo(
     () => (image ? imageToBeads(image, cols, rows, options) : null),
@@ -47,6 +58,40 @@ export function ImportModal({ cols, rows, onClose, onApply }: ImportModalProps) 
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
     }
   }, [])
+
+  // 打开时锁住背景滚动，焦点移进弹窗；关闭时把焦点还给触发它的按钮
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    dialogRef.current?.focus()
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      if (previouslyFocused && document.contains(previouslyFocused)) {
+        previouslyFocused.focus()
+      }
+    }
+  }, [])
+
+  const trapFocus = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') return
+    const items = focusablesIn(dialogRef.current)
+    if (items.length === 0) return
+    const first = items[0]
+    const last = items[items.length - 1]
+    const active = document.activeElement
+
+    if (event.shiftKey) {
+      if (active === first || !dialogRef.current?.contains(active)) {
+        event.preventDefault()
+        last.focus()
+      }
+    } else if (active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -94,11 +139,19 @@ export function ImportModal({ cols, rows, onClose, onApply }: ImportModalProps) 
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="modal import-modal" role="dialog" aria-modal="true" aria-label="从图片生成拼豆图纸">
+      <div
+        ref={dialogRef}
+        className="modal import-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={trapFocus}
+      >
         <header className="modal-head">
           <div>
             <span className="eyebrow">IMAGE → BEADS</span>
-            <h2>把图片变成拼豆</h2>
+            <h2 id={titleId}>把图片变成拼豆</h2>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
             <CloseIcon size={18} />

@@ -4,6 +4,32 @@
    拼豆工作室 — 暖纸 + 手作 zine 风格
    ============================================================ */
 
+/* 字体自托管：只打包界面实际用到的字形（约 50KB），不依赖任何外部 CDN。
+   正文交给系统字体，Mac / Windows 上都不需要下载。 */
+@font-face {
+  font-family: "ZCOOL KuaiLe";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/zcool-kuaile-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/dm-mono-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./assets/fonts/dm-mono-500.woff2") format("woff2");
+}
+
 :root {
   --paper: #f6efe1;
   --paper-2: #efe4d0;
@@ -17,9 +43,11 @@
   --teal: #1f7a6b;
   --gold: #e9b12b;
 
-  --font-display: "ZCOOL KuaiLe", "Noto Sans SC", "PingFang SC", sans-serif;
-  --font-body: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
-  --font-mono: "DM Mono", "SFMono-Regular", "Menlo", monospace;
+  --font-display: "ZCOOL KuaiLe", system-ui, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --font-body: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
   --radius: 18px;
   --shadow-card: 5px 6px 0 rgba(36, 28, 21, 0.1);
@@ -193,6 +221,7 @@ button:disabled {
   color: var(--ink-soft);
   min-width: 0;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .tagline-bead {
@@ -1212,6 +1241,12 @@ input[type="range"]::-moz-range-thumb {
   scrollbar-color: #cdbb9e transparent;
 }
 
+/* 容器本身只用来接住焦点，不要在边框外再画一圈 */
+.modal:focus,
+.modal:focus-visible {
+  outline: none;
+}
+
 .modal-head {
   display: flex;
   align-items: flex-start;
@@ -1488,6 +1523,118 @@ input[type="range"]::-moz-range-thumb {
   margin-top: 16px;
   padding-top: 12px;
   border-top: 1.5px dashed var(--line);
+}
+
+/* ---------- 打印图纸 ---------- */
+
+.print-modal {
+  width: min(880px, 100%);
+}
+
+.bp-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 12px 0 10px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+
+.bp-summary b {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.bp-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.bp-pages {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cdbb9e transparent;
+}
+
+/* 只有一张时不会溢出，可以放心居中 */
+.bp-pages.is-single {
+  justify-content: center;
+}
+
+.bp-page {
+  flex: none;
+  width: 240px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: center;
+}
+
+.bp-frame {
+  display: block;
+  padding: 5px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 2px 2px 0 rgba(36, 28, 21, 0.1);
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.bp-page:hover .bp-frame {
+  border-color: var(--ink-soft);
+}
+
+.bp-page[aria-pressed="true"] .bp-frame {
+  border-color: var(--accent);
+  box-shadow: 3px 3px 0 rgba(225, 73, 47, 0.26);
+  transform: translateY(-1px);
+}
+
+.bp-page:focus-visible .bp-frame {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.bp-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.bp-page-label {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+
+.bp-note {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  line-height: 1.65;
+  color: var(--ink-soft);
 }
 
 /* ---------- Toast ---------- */
@@ -1855,5 +2002,53 @@ input[type="range"]::-moz-range-thumb {
 
   .bead-list-scroll {
     max-height: 300px;
+  }
+}
+
+/* ---------- 打印：只留下图纸，界面本身不输出 ---------- */
+
+.print-root {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body > *:not(.print-root) {
+    display: none !important;
+  }
+
+  .print-root {
+    display: block !important;
+  }
+
+  .print-sheet {
+    display: block;
+    width: 210mm;
+    height: 297mm;
+    overflow: hidden;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .print-sheet:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .print-sheet img {
+    display: block;
+    width: 100%;
+    height: 100%;
   }
 }

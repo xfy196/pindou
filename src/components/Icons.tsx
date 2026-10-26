@@ -187,6 +187,17 @@ export function ListIcon(props: IconProps) {
   )
 }
 
+export function PrinterIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M7.2 9V4h9.6v5" />
+      <path d="M7.2 17.5H5.4A1.9 1.9 0 0 1 3.5 15.6v-4.4A2.2 2.2 0 0 1 5.7 9h12.6a2.2 2.2 0 0 1 2.2 2.2v4.4a1.9 1.9 0 0 1-1.9 1.9h-1.8" />
+      <rect x="7.2" y="14.2" width="9.6" height="6.3" rx="1" />
+      <path d="M17.4 12.1h.01" />
+    </Svg>
+  )
+}
+
 export function CheckIcon(props: IconProps) {
   return (
     <Svg {...props}>

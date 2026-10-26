@@ -8,6 +8,7 @@ import {
   GridIcon,
   ImageIcon,
   MirrorIcon,
+  PrinterIcon,
   RedoIcon,
   SaveIcon,
   TrashIcon,
@@ -16,10 +17,12 @@ import {
 import { ImportModal } from './components/ImportModal'
 import { PalettePanel } from './components/PalettePanel'
 import { PatternBar } from './components/PatternBar'
+import { PrintModal } from './components/PrintModal'
 import { ToastStack, type ToastItem } from './components/Toast'
 import { ToolRail } from './components/ToolRail'
-import { isSameGrid, type Grid } from './lib/board'
+import { isSameGrid, EMPTY, type Grid } from './lib/board'
 import { PALETTE, paletteIndex } from './lib/colors'
+import { downloadBlob } from './lib/download'
 import { drawBoard } from './lib/draw'
 import { buildPattern, PATTERNS, type PatternId } from './lib/patterns'
 import { BOARDS, TOOLS, type Point, type Tool } from './lib/types'
@@ -27,41 +30,98 @@ import { BOARDS, TOOLS, type Point, type Tool } from './lib/types'
 const STORAGE_KEY = 'pindou.studio.v1'
 const DEFAULT_SIZE = 29
 const DEFAULT_COLOR = paletteIndex('P11')
+const DEFAULT_TOOL: Tool = 'brush'
+const ZOOM_MIN = 50
+const ZOOM_MAX = 220
+const ZOOM_DEFAULT = 100
 
-function loadInitialGrid(): Grid {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const saved = JSON.parse(raw) as Partial<Grid>
-      if (
-        Number.isInteger(saved.cols) &&
-        Number.isInteger(saved.rows) &&
-        Array.isArray(saved.cells) &&
-        saved.cells.length === (saved.cols as number) * (saved.rows as number)
-      ) {
-        const cols = saved.cols as number
-        const rows = saved.rows as number
-        const cells = saved.cells.map((value) =>
-          typeof value === 'number' && value >= 0 && value < PALETTE.length ? value : -1,
-        )
-        return { cols, rows, cells }
-      }
-    }
-  } catch {
-    // 隐私模式下 localStorage 可能不可用，直接使用默认图案
-  }
-  return { cols: DEFAULT_SIZE, rows: DEFAULT_SIZE, cells: buildPattern('heart', DEFAULT_SIZE, DEFAULT_SIZE) }
+interface SavedPrefs {
+  /** 存色号而不是下标，将来色卡顺序变了也不会串色 */
+  color: string
+  tool: Tool
+  showGrid: boolean
+  mirror: boolean
+  zoom: number
 }
 
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  window.setTimeout(() => URL.revokeObjectURL(url), 1500)
+interface SavedState {
+  grid: Grid
+  prefs: SavedPrefs
+}
+
+const TOOL_IDS = new Set<string>(TOOLS.map((item) => item.id))
+
+function fallbackPrefs(): SavedPrefs {
+  return {
+    color: PALETTE[DEFAULT_COLOR].id,
+    tool: DEFAULT_TOOL,
+    showGrid: true,
+    mirror: false,
+    zoom: ZOOM_DEFAULT,
+  }
+}
+
+function resolveColorIndex(id: string): number {
+  const index = PALETTE.findIndex((color) => color.id === id)
+  return index >= 0 ? index : DEFAULT_COLOR
+}
+
+function clampZoom(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return ZOOM_DEFAULT
+  return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value)))
+}
+
+/** 读回上一次的画布与偏好；任何一项不合法都退回默认，不让坏数据把界面带崩 */
+function readSavedState(): SavedState {
+  const fallbackGrid: Grid = {
+    cols: DEFAULT_SIZE,
+    rows: DEFAULT_SIZE,
+    cells: buildPattern('heart', DEFAULT_SIZE, DEFAULT_SIZE),
+  }
+  const fallback: SavedState = { grid: fallbackGrid, prefs: fallbackPrefs() }
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return fallback
+
+    const saved = JSON.parse(raw) as {
+      cols?: unknown
+      rows?: unknown
+      cells?: unknown
+      prefs?: Partial<SavedPrefs>
+    }
+
+    const { cols, rows, cells } = saved
+    const grid: Grid =
+      Number.isInteger(cols) &&
+      Number.isInteger(rows) &&
+      Array.isArray(cells) &&
+      cells.length === (cols as number) * (rows as number)
+        ? {
+            cols: cols as number,
+            rows: rows as number,
+            cells: cells.map((value) =>
+              typeof value === 'number' && value >= 0 && value < PALETTE.length ? value : EMPTY,
+            ),
+          }
+        : fallbackGrid
+
+    const prefs = saved.prefs ?? {}
+    const base = fallbackPrefs()
+    return {
+      grid,
+      prefs: {
+        color: typeof prefs.color === 'string' ? prefs.color : base.color,
+        tool: typeof prefs.tool === 'string' && TOOL_IDS.has(prefs.tool) ? prefs.tool : base.tool,
+        showGrid: typeof prefs.showGrid === 'boolean' ? prefs.showGrid : base.showGrid,
+        mirror: typeof prefs.mirror === 'boolean' ? prefs.mirror : base.mirror,
+        zoom: clampZoom(prefs.zoom),
+      },
+    }
+  } catch {
+    // 隐私模式下 localStorage 可能不可用，直接用默认图案
+    return fallback
+  }
 }
 
 function BrandMark() {
@@ -84,22 +144,24 @@ function BrandMark() {
 }
 
 export default function App() {
-  const [grid, setGridState] = useState<Grid>(loadInitialGrid)
+  const [boot] = useState(readSavedState)
+  const [grid, setGridState] = useState<Grid>(boot.grid)
   const gridRef = useRef(grid)
   const strokeRef = useRef<{ base: Grid; pushed: boolean } | null>(null)
   const undoRef = useRef<Grid[]>([])
   const redoRef = useRef<Grid[]>([])
   const [hist, setHist] = useState({ u: 0, r: 0 })
 
-  const [tool, setTool] = useState<Tool>('brush')
-  const [colorIndex, setColorIndex] = useState(DEFAULT_COLOR)
-  const [zoom, setZoom] = useState(100)
-  const [showGrid, setShowGrid] = useState(true)
-  const [mirror, setMirror] = useState(false)
+  const [tool, setTool] = useState<Tool>(boot.prefs.tool)
+  const [colorIndex, setColorIndex] = useState(() => resolveColorIndex(boot.prefs.color))
+  const [zoom, setZoom] = useState(boot.prefs.zoom)
+  const [showGrid, setShowGrid] = useState(boot.prefs.showGrid)
+  const [mirror, setMirror] = useState(boot.prefs.mirror)
   const [fitCell, setFitCell] = useState(18)
   const [hover, setHover] = useState<Point | null>(null)
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [printOpen, setPrintOpen] = useState(false)
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [justSaved, setJustSaved] = useState(false)
 
@@ -181,7 +243,7 @@ export default function App() {
     })
     setHist({ u: undoRef.current.length, r: redoRef.current.length })
     commitGrid(previous)
-    if (current.cols !== previous.cols || current.rows !== previous.rows) setZoom(100)
+    if (current.cols !== previous.cols || current.rows !== previous.rows) setZoom(ZOOM_DEFAULT)
   }, [commitGrid])
 
   const redo = useCallback(() => {
@@ -195,17 +257,41 @@ export default function App() {
     })
     setHist({ u: undoRef.current.length, r: redoRef.current.length })
     commitGrid(next)
-    if (current.cols !== next.cols || current.rows !== next.rows) setZoom(100)
+    if (current.cols !== next.cols || current.rows !== next.rows) setZoom(ZOOM_DEFAULT)
   }, [commitGrid])
 
-  const saveNow = useCallback(() => {
+  // 偏好单独放 ref：写入时总是拿到最新值，也让 persistNow 保持稳定引用
+  const prefsRef = useRef<SavedPrefs>(boot.prefs)
+  useEffect(() => {
+    prefsRef.current = {
+      color: PALETTE[colorIndex].id,
+      tool,
+      showGrid,
+      mirror,
+      zoom,
+    }
+  }, [colorIndex, tool, showGrid, mirror, zoom])
+
+  const persistNow = useCallback(() => {
     const current = gridRef.current
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ cols: current.cols, rows: current.rows, cells: current.cells }),
+        JSON.stringify({
+          cols: current.cols,
+          rows: current.rows,
+          cells: current.cells,
+          prefs: prefsRef.current,
+        }),
       )
+      return true
     } catch {
+      return false
+    }
+  }, [])
+
+  const saveNow = useCallback(() => {
+    if (!persistNow()) {
       toast('保存失败，浏览器可能禁用了本地存储')
       return
     }
@@ -213,22 +299,29 @@ export default function App() {
     window.clearTimeout(savedTimer.current)
     savedTimer.current = window.setTimeout(() => setJustSaved(false), 1800)
     toast('已保存到这台设备')
-  }, [toast])
+  }, [persistNow, toast])
 
+  // 停下来 600ms 后落盘
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const current = gridRef.current
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ cols: current.cols, rows: current.rows, cells: current.cells }),
-        )
-      } catch {
-        // 忽略自动保存失败
-      }
-    }, 600)
+    const timer = window.setTimeout(persistNow, 600)
     return () => window.clearTimeout(timer)
-  }, [grid])
+  }, [grid, tool, colorIndex, showGrid, mirror, zoom, persistNow])
+
+  // 页面被切走 / 关闭时立刻补写一次，避免防抖窗口内丢笔
+  useEffect(() => {
+    const flush = () => {
+      persistNow()
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [persistNow])
 
   useEffect(() => {
     const element = stageRef.current
@@ -262,7 +355,7 @@ export default function App() {
       beginStroke()
       applyGrid({ cols: size, rows: size, cells })
       endStroke()
-      setZoom(100)
+      setZoom(ZOOM_DEFAULT)
       toast(`画布已换成 ${size} × ${size}`)
     },
     [applyGrid, beginStroke, endStroke, toast],
@@ -386,6 +479,12 @@ export default function App() {
         saveNow()
         return
       }
+      if (mod && key === 'p') {
+        // 拦下浏览器的原生打印，否则打出来的是整个工作台界面
+        event.preventDefault()
+        setPrintOpen(true)
+        return
+      }
       if (mod && key === 'z') {
         event.preventDefault()
         if (event.shiftKey) redo()
@@ -402,8 +501,8 @@ export default function App() {
       else if (key === 'i') setTool('picker')
       else if (key === 'm') setMirror((value) => !value)
       else if (key === 'g') setShowGrid((value) => !value)
-      else if (key === '[') setZoom((value) => Math.max(50, value - 10))
-      else if (key === ']') setZoom((value) => Math.min(220, value + 10))
+      else if (key === '[') setZoom((value) => Math.max(ZOOM_MIN, value - 10))
+      else if (key === ']') setZoom((value) => Math.min(ZOOM_MAX, value + 10))
     }
 
     window.addEventListener('keydown', onKey)
@@ -462,6 +561,15 @@ export default function App() {
           <button type="button" className="btn ghost" onClick={saveNow}>
             {justSaved ? <CheckIcon size={16} /> : <SaveIcon size={16} />}
             <span className="btn-label">{justSaved ? '已保存' : '保存'}</span>
+          </button>
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => setPrintOpen(true)}
+            title="打印图纸 ⌘P"
+          >
+            <PrinterIcon size={16} />
+            <span className="btn-label">打印图纸</span>
           </button>
           <button type="button" className="btn primary" onClick={exportPng}>
             <DownloadIcon size={16} />
@@ -571,8 +679,8 @@ export default function App() {
                 <span className="zoom-label">缩放</span>
                 <input
                   type="range"
-                  min={50}
-                  max={220}
+                  min={ZOOM_MIN}
+                  max={ZOOM_MAX}
                   step={5}
                   value={zoom}
                   onChange={(event) => setZoom(Number(event.target.value))}
@@ -604,6 +712,10 @@ export default function App() {
           onClose={() => setImportOpen(false)}
           onApply={handleImportApply}
         />
+      )}
+
+      {printOpen && (
+        <PrintModal grid={grid} onClose={() => setPrintOpen(false)} onToast={toast} />
       )}
 
       <ToastStack items={toasts} />
